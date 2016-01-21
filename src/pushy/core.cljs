@@ -64,12 +64,15 @@
   "Takes in three functions:
     * dispatch-fn: the function that dispatches when a match is found
     * match-fn: the function used to check if a particular route exists
-    * identity-fn: (optional) extract the route from value returned by match-fn"
+    * identity-fn: (optional) extract the route from value returned by match-fn
+    * navigation-fn: (optional) synchronous check should the navigation be performed
+                     it can be used to prevent navigation for example if it would cause
+                     data loss."
   [dispatch-fn match-fn &
-   {:keys [processable-url? identity-fn]
+   {:keys [processable-url? identity-fn navigation-fn]
     :or {processable-url? processable-url?
-         identity-fn identity}}]
-
+         identity-fn identity
+         navigation-fn (fn [continue] (continue true))}}]
   (let [history (new-history)
         event-keys (atom nil)]
     (reify
@@ -118,13 +121,17 @@
                                  (not (get #{"_blank" "_self"} (.getAttribute el "target")))
                                  ;; Bypass dispatch if middle click
                                  (not= 1 (.-button e)))
-                        (let [next-token (get-token-from-uri uri)]
-                          (when (identity-fn (match-fn next-token))
-                            ;; Dispatch!
-                            (if-let [title (-> el .-title)]
-                              (set-token! this next-token title)
-                              (set-token! this next-token))
-                            (.preventDefault e)))))))))
+                        (navigation-fn
+                         (fn [continue]
+                           (if continue
+                            (let [next-token (get-token-from-uri uri)]
+                              (when (identity-fn (match-fn next-token))
+                                ;; Dispatch!
+                                (if-let [title (-> el .-title)]
+                                  (set-token! this next-token title)
+                                  (set-token! this next-token))
+                                (.preventDefault e)))
+                            (.preventDefault e))))))))))
         nil)
 
       (stop! [this]
